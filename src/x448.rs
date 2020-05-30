@@ -1,5 +1,6 @@
 use ed448_goldilocks::curve::MontgomeryPoint;
 use ed448_goldilocks::Scalar;
+use rand_core::{CryptoRng, RngCore};
 
 /// Convert a byte array of length 56 into a PublicKey
 impl From<[u8; 56]> for PublicKey {
@@ -55,6 +56,7 @@ impl PublicKey {
         }
         Some(public_key)
     }
+
     /// Converts a public key into a byte slice
     pub fn as_bytes(&self) -> &[u8; 56] {
         self.0.as_bytes()
@@ -62,15 +64,25 @@ impl PublicKey {
 }
 
 impl Secret {
-    // XXX: Use RNG to produce a random secret
-    pub fn new() -> Secret {
-        todo!()
+    /// Generate a x448 `Secret` key.
+    // Taken from dalek-x25519
+    pub fn new<T>(csprng: &mut T) -> Self
+    where
+        T: RngCore + CryptoRng,
+    {
+        let mut bytes = [0u8; 56];
+
+        csprng.fill_bytes(&mut bytes);
+
+        Secret::from(bytes)
     }
+
     /// Clamps the secret key according to RFC7748
     fn clamp(&mut self) {
         self.0[0] &= 252;
         self.0[55] |= 128;
     }
+
     /// Performs a Diffie-hellman key exchange between the secret key and an external public key
     pub fn as_diffie_hellman(&self, public_key: &PublicKey) -> Option<SharedSecret> {
         // Check if the point is one of the low order points
@@ -85,6 +97,7 @@ impl Secret {
     pub fn to_diffie_hellman(self, public_key: &PublicKey) -> Option<SharedSecret> {
         self.as_diffie_hellman(public_key)
     }
+
     /// Converts a byte slice into a secret and clamp
     pub fn from_bytes(bytes: &[u8]) -> Option<Secret> {
         // First check if we have 56 bytes
@@ -95,6 +108,7 @@ impl Secret {
         let secret = Secret::from(slice_to_array(bytes));
         Some(secret)
     }
+
     /// Converts a secret into a byte array
     pub fn as_bytes(&self) -> &[u8; 56] {
         &self.0
@@ -108,14 +122,91 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
 }
 
 /// The raw x448 function defined in RFC448.
-pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> [u8; 56] {
-    let point = PublicKey::from_bytes(&point_bytes).unwrap();
-    point.0.mul(&Scalar::from_bytes(scalar_bytes)).0
+/// Currently, the only reason I can think of for using the raw function is FFI.
+/// Option is FFI safe[1]. So we can still maintain that the invariant that
+/// we do not return a low order point.
+/// [1] https://github.com/rust-lang/nomicon/issues/59
+pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
+    let point = PublicKey::from_bytes(&point_bytes)?;
+    let scalar = Scalar::from_bytes(scalar_bytes);
+    Some(point.0.mul(&scalar).0)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand_core::OsRng;
+    #[test]
+    fn test_low_order() {
+        // These are also in ed448-goldilocks. We could export them, but I cannot see any use except for this test.
+        const LOW_A: MontgomeryPoint = MontgomeryPoint([
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]);
+        const LOW_B: MontgomeryPoint = MontgomeryPoint([
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]);
+        const LOW_C: MontgomeryPoint = MontgomeryPoint([
+            0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ]);
+
+        // Notice, that this is the only way to add low order points into the system
+        // and this is not exposed to the user. The user will use `from_bytes` which will check for low order points.
+        let bad_key_a = PublicKey(LOW_A);
+        let checked_bad_key_a = PublicKey::from_bytes(&LOW_A.0);
+        assert!(checked_bad_key_a.is_none());
+
+        let bad_key_b = PublicKey(LOW_B);
+        let checked_bad_key_b = PublicKey::from_bytes(&LOW_B.0);
+        assert!(checked_bad_key_b.is_none());
+
+        let bad_key_c = PublicKey(LOW_C);
+        let checked_bad_key_c = PublicKey::from_bytes(&LOW_C.0);
+        assert!(checked_bad_key_c.is_none());
+
+        let bob_priv = Secret::new(&mut OsRng);
+
+        // If for some reason, these low order points are added to the system
+        // The Diffie-Hellman key exchange for the honest party will return None.
+        let shared_bob = bob_priv.as_diffie_hellman(&bad_key_a);
+        assert!(shared_bob.is_none());
+
+        let shared_bob = bob_priv.as_diffie_hellman(&bad_key_b);
+        assert!(shared_bob.is_none());
+
+        let shared_bob = bob_priv.as_diffie_hellman(&bad_key_c);
+        assert!(shared_bob.is_none());
+    }
+
+    #[test]
+    fn test_random_dh() {
+        let alice_priv = Secret::new(&mut OsRng);
+        let alice_pub = PublicKey::from(&alice_priv);
+
+        let bob_priv = Secret::new(&mut OsRng);
+        let bob_pub = PublicKey::from(&bob_priv);
+
+        // Since Alice and Bob are both using the API correctly
+        // If by chance, a low order point is generated, the clamping function will
+        // remove it.
+        let low_order = alice_pub.0.is_low_order() || bob_pub.0.is_low_order();
+        assert!(low_order == false);
+
+        // Both Alice and Bob perform the DH key exchange.
+        // As mentioned above, we unwrap because both Parties are using the API correctly.
+        let shared_alice = alice_priv.as_diffie_hellman(&bob_pub).unwrap();
+        let shared_bob = bob_priv.as_diffie_hellman(&alice_pub).unwrap();
+
+        assert_eq!(shared_alice.as_bytes()[..], shared_bob.as_bytes()[..]);
+    }
 
     #[test]
     fn test_rfc_test_vectors_alice_bob() {
@@ -270,21 +361,21 @@ mod test {
 
         // Iterate 1 time then check value on 1st iteration
         for _ in 1..=1 {
-            result = x448(point, scalar);
+            result = x448(point, scalar).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_iter[..]);
 
         // Iterate 999 times then check value on 1_000th iteration
         for _ in 1..=999 {
-            result = x448(point, scalar);
+            result = x448(point, scalar).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_k_iter[..]);
 
         // Iterate 999_000 times then check value on 1_000_000th iteration
         for _ in 1..=999_000 {
-            result = x448(point, scalar);
+            result = x448(point, scalar).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_mil_iter[..]);
