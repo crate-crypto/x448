@@ -22,9 +22,10 @@ impl From<[u8; 56]> for Secret {
 
 /// Given a Secret Key, compute the corresponding public key
 /// using the generator specified in RFC7748
+/// XXX: Waiting for upstream PR to use pre-computation
 impl From<&Secret> for PublicKey {
     fn from(secret: &Secret) -> PublicKey {
-        let point = MontgomeryPoint::generator().mul(&Scalar::from_bytes(secret.0));
+        let point = &MontgomeryPoint::generator() * &Scalar::from_bytes(secret.0);
         PublicKey(point)
     }
 }
@@ -89,7 +90,7 @@ impl Secret {
         if public_key.0.is_low_order() {
             return None;
         }
-        let shared_key = public_key.0.mul(&Scalar::from_bytes(self.0)); // FIXME: in Ed448 crate
+        let shared_key = &public_key.0 * &Scalar::from_bytes(self.0);
         Some(PublicKey(shared_key))
     }
 
@@ -129,7 +130,7 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
 pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
     let point = PublicKey::from_bytes(&point_bytes)?;
     let scalar = Scalar::from_bytes(scalar_bytes);
-    Some(point.0.mul(&scalar).0)
+    Some((&point.0 * &scalar).0)
 }
 
 #[cfg(test)]
