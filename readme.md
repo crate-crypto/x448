@@ -36,11 +36,11 @@ Both parties now have enough information to compute the shared key. They now ind
 
 #### Alice
 ```rust
-    let alices_shared_key = alice_priv.to_diffie_hellman(&bob_pub);
+    let alices_shared_secret = alice_secret.to_diffie_hellman(&bob_public_key);
 ```
 #### Bob
 ```rust
-    let bobs_shared_key = bob_priv.as_diffie_hellman(&alice_pub);
+    let bobs_shared_secret = bob_secret.as_diffie_hellman(&alice_public_key);
 ```
 
 That's it. Kinda.
@@ -52,7 +52,7 @@ That's it. Kinda.
 
 ## API Discussion
 
-The API exposes 3 structures; a public key , a shared public key and a secret key.
+The API exposes 3 structures; a public key , a shared secret key and a secret key.
 
 - The public key is an elliptic curve point. It corresponds to a Scalar that the user owns.
 - The secret key is a Scalar. This Scalar corresponds to the user's public key and the generator specified in the RFC.
