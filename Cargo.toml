@@ -3,7 +3,18 @@ name = "x448"
 version = "0.1.0"
 authors = ["Kevaundray Wedderburn <kevtheappdev@gmail.com>"]
 edition = "2018"
-
+readme = "README.md"
+license = "BSD-3-Clause"
+repository = "https://github.com/crate-crypto/x448"
+homepage = "https://github.com/crate-crypto/x448"
+documentation = "https://github.com/crate-crypto/x448"
+categories = ["cryptography"]
+keywords = ["cryptography", "crypto", "x448", "diffie-hellman", "curve448",]
+description = "A pure-Rust implementation of X448."
+exclude = [
+    ".gitignore",
+    ".github/*"
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
