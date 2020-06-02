@@ -2,14 +2,6 @@ use ed448_goldilocks::curve::MontgomeryPoint;
 use ed448_goldilocks::Scalar;
 use rand_core::{CryptoRng, RngCore};
 
-/// Convert a byte array of length 56 into a PublicKey
-impl From<[u8; 56]> for PublicKey {
-    fn from(arr: [u8; 56]) -> PublicKey {
-        let point = MontgomeryPoint(arr);
-        PublicKey(point)
-    }
-}
-
 /// Computes a Scalar according to RFC7748
 /// given a byte array of length 56
 impl From<[u8; 56]> for Secret {
@@ -46,16 +38,26 @@ impl PublicKey {
     /// -  The length of the slice is not 56
     /// -  The point is a low order point
     pub fn from_bytes(bytes: &[u8]) -> Option<PublicKey> {
-        // First check if we have 56 bytes
-        if bytes.len() != 56 {
-            return None;
-        }
-        let public_key = PublicKey::from(slice_to_array(bytes));
-        // Check if the point is a low order point
+        let public_key = PublicKey::from_bytes_unchecked(bytes)?;
         if public_key.0.is_low_order() {
             return None;
         }
         Some(public_key)
+    }
+    /// Converts a bytes slice into a Public key
+    /// Returns None if:
+    /// -  The length of the slice is not 56
+    pub fn from_bytes_unchecked(bytes: &[u8]) -> Option<PublicKey> {
+        // First check if we have 56 bytes
+        if bytes.len() != 56 {
+            return None;
+        }
+
+        // Check if the point has low order
+        let arr = slice_to_array(bytes);
+        let point = MontgomeryPoint(arr);
+
+        Some(PublicKey(point))
     }
 
     /// Converts a public key into a byte slice
@@ -132,14 +134,14 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
 /// Option is FFI safe[1]. So we can still maintain that the invariant that
 /// we do not return a low order point.
 /// [1] https://github.com/rust-lang/nomicon/issues/59
-pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
+pub fn x448(scalar_bytes: [u8; 56], point_bytes: [u8; 56]) -> Option<[u8; 56]> {
     let point = PublicKey::from_bytes(&point_bytes)?;
     let scalar = Secret::from(scalar_bytes).as_scalar();
     Some((&point.0 * &scalar).0)
 }
-/// An unsafe version of he x448 function defined in RFC448
+/// An unchecked version of the x448 function defined in RFC448
 /// No checks are made on the points.
-pub fn x448_unsafe(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> [u8; 56] {
+pub fn x448_unchecked(scalar_bytes: [u8; 56], point_bytes: [u8; 56]) -> [u8; 56] {
     let point = MontgomeryPoint(point_bytes);
     let scalar = Secret::from(scalar_bytes).as_scalar();
     (&point * &scalar).0
@@ -376,21 +378,21 @@ mod test {
 
         // Iterate 1 time then check value on 1st iteration
         for _ in 1..=1 {
-            result = x448(point, scalar).unwrap();
+            result = x448(scalar, point).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_iter[..]);
 
         // Iterate 999 times then check value on 1_000th iteration
         for _ in 1..=999 {
-            result = x448(point, scalar).unwrap();
+            result = x448(scalar, point).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_k_iter[..]);
 
         // Iterate 999_000 times then check value on 1_000_000th iteration
         for _ in 1..=999_000 {
-            result = x448(point, scalar).unwrap();
+            result = x448(scalar, point).unwrap();
             swap(&mut scalar, &mut point, &result);
         }
         assert_eq!(&result[..], &one_mil_iter[..]);
