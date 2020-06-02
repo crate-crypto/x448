@@ -84,13 +84,18 @@ impl Secret {
         self.0[55] |= 128;
     }
 
+    /// Views a Secret as a Scalar
+    fn as_scalar(&self) -> Scalar {
+        Scalar::from_bytes(self.0)
+    }
+
     /// Performs a Diffie-hellman key exchange between the secret key and an external public key
     pub fn as_diffie_hellman(&self, public_key: &PublicKey) -> Option<SharedSecret> {
         // Check if the point is one of the low order points
         if public_key.0.is_low_order() {
             return None;
         }
-        let shared_key = &public_key.0 * &Scalar::from_bytes(self.0);
+        let shared_key = &public_key.0 * &self.as_scalar();
         Some(PublicKey(shared_key))
     }
 
@@ -129,22 +134,18 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
 /// [1] https://github.com/rust-lang/nomicon/issues/59
 pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
     let point = PublicKey::from_bytes(&point_bytes)?;
-    let secret = Secret::from(scalar_bytes);
-    let scalar = Scalar::from_bytes(secret.0);
+    let scalar = Secret::from(scalar_bytes).as_scalar();
     Some((&point.0 * &scalar).0)
 }
 /// An unsafe version of he x448 function defined in RFC448
 /// No checks are made on the points.
 pub fn x448_unsafe(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> [u8; 56] {
     let point = MontgomeryPoint(point_bytes);
-    let scalar = Scalar::from_bytes(scalar_bytes);
+    let scalar = Secret::from(scalar_bytes).as_scalar();
     (&point * &scalar).0
 }
 
-pub const X448_BASEPOINT_BYTES: [u8; 56] = [
-    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
+pub const X448_BASEPOINT_BYTES: [u8; 56] = MontgomeryPoint::generator().0;
 
 #[cfg(test)]
 mod test {
