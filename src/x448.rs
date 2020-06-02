@@ -122,7 +122,7 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
     array
 }
 
-/// The raw x448 function defined in RFC448.
+/// A safe version of the x448 function defined in RFC448.
 /// Currently, the only reason I can think of for using the raw function is FFI.
 /// Option is FFI safe[1]. So we can still maintain that the invariant that
 /// we do not return a low order point.
@@ -133,8 +133,15 @@ pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
     let scalar = Scalar::from_bytes(secret.0);
     Some((&point.0 * &scalar).0)
 }
+/// An unsafe version of he x448 function defined in RFC448
+/// No checks are made on the points.
+pub fn x448_unsafe(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> [u8; 56] {
+    let point = MontgomeryPoint(point_bytes);
+    let scalar = Scalar::from_bytes(scalar_bytes);
+    (&point * &scalar).0
+}
 
-pub const X25519_BASEPOINT_BYTES: [u8; 56] = [
+pub const X448_BASEPOINT_BYTES: [u8; 56] = [
     5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
