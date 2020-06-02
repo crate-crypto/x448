@@ -1,1 +1,3 @@
-pub mod x448;
+mod x448;
+
+pub use crate::x448::*;
