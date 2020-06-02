@@ -129,9 +129,15 @@ fn slice_to_array(bytes: &[u8]) -> [u8; 56] {
 /// [1] https://github.com/rust-lang/nomicon/issues/59
 pub fn x448(point_bytes: [u8; 56], scalar_bytes: [u8; 56]) -> Option<[u8; 56]> {
     let point = PublicKey::from_bytes(&point_bytes)?;
-    let scalar = Scalar::from_bytes(scalar_bytes);
+    let secret = Secret::from(scalar_bytes);
+    let scalar = Scalar::from_bytes(secret.0);
     Some((&point.0 * &scalar).0)
 }
+
+pub const X25519_BASEPOINT_BYTES: [u8; 56] = [
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 #[cfg(test)]
 mod test {
