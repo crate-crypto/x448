@@ -1,6 +1,7 @@
 use ed448_goldilocks::curve::MontgomeryPoint;
 use ed448_goldilocks::Scalar;
 use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 /// Computes a Scalar according to RFC7748
 /// given a byte array of length 56
@@ -30,6 +31,8 @@ pub struct Secret([u8; 56]);
 
 /// A SharedSecret is a point on Curve448.
 /// This point is the result of a Diffie-Hellman key exchange.
+#[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct SharedSecret(MontgomeryPoint);
 
 impl PublicKey {
