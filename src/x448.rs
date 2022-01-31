@@ -30,7 +30,7 @@ pub struct Secret([u8; 56]);
 
 /// A SharedSecret is a point on Curve448.
 /// This point is the result of a Diffie-Hellman key exchange.
-pub type SharedSecret = PublicKey;
+pub struct SharedSecret(MontgomeryPoint);
 
 impl PublicKey {
     /// Converts a bytes slice into a Public key
@@ -61,6 +61,13 @@ impl PublicKey {
     }
 
     /// Converts a public key into a byte slice
+    pub fn as_bytes(&self) -> &[u8; 56] {
+        self.0.as_bytes()
+    }
+}
+
+impl SharedSecret {
+    /// Converts a shared secret into a byte slice
     pub fn as_bytes(&self) -> &[u8; 56] {
         self.0.as_bytes()
     }
@@ -98,7 +105,7 @@ impl Secret {
             return None;
         }
         let shared_key = &public_key.0 * &self.as_scalar();
-        Some(PublicKey(shared_key))
+        Some(SharedSecret(shared_key))
     }
 
     /// Performs a Diffie-hellman key exchange once between the secret key and an external public key
