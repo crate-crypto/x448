@@ -27,6 +27,8 @@ impl From<&Secret> for PublicKey {
 pub struct PublicKey(MontgomeryPoint);
 
 /// A Secret is a Scalar on Curve448.
+#[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct Secret([u8; 56]);
 
 /// A SharedSecret is a point on Curve448.
