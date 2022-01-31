@@ -1,6 +1,7 @@
 use ed448_goldilocks::curve::MontgomeryPoint;
 use ed448_goldilocks::Scalar;
 use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 /// Computes a Scalar according to RFC7748
 /// given a byte array of length 56
@@ -26,11 +27,15 @@ impl From<&Secret> for PublicKey {
 pub struct PublicKey(MontgomeryPoint);
 
 /// A Secret is a Scalar on Curve448.
+#[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct Secret([u8; 56]);
 
 /// A SharedSecret is a point on Curve448.
 /// This point is the result of a Diffie-Hellman key exchange.
-pub type SharedSecret = PublicKey;
+#[derive(Zeroize)]
+#[zeroize(drop)]
+pub struct SharedSecret(MontgomeryPoint);
 
 impl PublicKey {
     /// Converts a bytes slice into a Public key
@@ -61,6 +66,13 @@ impl PublicKey {
     }
 
     /// Converts a public key into a byte slice
+    pub fn as_bytes(&self) -> &[u8; 56] {
+        self.0.as_bytes()
+    }
+}
+
+impl SharedSecret {
+    /// Converts a shared secret into a byte slice
     pub fn as_bytes(&self) -> &[u8; 56] {
         self.0.as_bytes()
     }
@@ -98,7 +110,7 @@ impl Secret {
             return None;
         }
         let shared_key = &public_key.0 * &self.as_scalar();
-        Some(PublicKey(shared_key))
+        Some(SharedSecret(shared_key))
     }
 
     /// Performs a Diffie-hellman key exchange once between the secret key and an external public key
