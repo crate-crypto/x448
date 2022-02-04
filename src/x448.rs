@@ -293,7 +293,7 @@ mod test {
             secret: [u8; 56],
             point: [u8; 56],
             expected: [u8; 56],
-        };
+        }
 
         let test_vectors = vec![
             Test {
